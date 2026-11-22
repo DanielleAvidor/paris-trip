@@ -290,6 +290,7 @@ function vHome(){
  else h+=`<div class="card empty">הכול סגור. תיהנו!</div>`;
  h+=`<div class="grid g3" style="margin-top:16px"><div class="card stat"><b>${bd}/${b.length}</b><span>הזמנות</span></div><div class="card stat"><b>${td}/${tk.length}</b><span>משימות</span></div><div class="card stat"><b>${sd}/${st.length}</b><span>תחנות</span></div></div>`;
  h+=`<div class="card" style="margin-top:12px"><label style="margin-top:0">מתי יוצאים?</label><div class="row"><input type="date" id="start" value="${esc(S.start)}" style="max-width:200px"><span class="mut">${S.days.length} ימים בלוז</span></div></div>`;
+ if(AG.checked&&!AG.sample)h+=`<div class="card" style="margin-top:12px"><b>הסוכן והסנכרון בין שניכם</b><div class="mut" style="margin:4px 0 10px">בגרסה הזו הכול נשמר רק במכשיר הזה. הסוכן והסנכרון זמינים בגרסה ב-Claude.</div><a class="btn sm" target="_blank" rel="noopener" href="https://claude.ai/artifact/Sh2wnvXzshGhTTx9vaeeGx">פתחו את הגרסה המלאה</a></div>`;
  h+=`<div style="margin:16px 0 6px"><button class="btn ghost" data-a="share">העתקת הלוז ל-WhatsApp</button></div>`;
  return h}
 function itemRow(it){
@@ -454,14 +455,14 @@ async function agentSend(text){
 }
 async function initAgent(){
  try{AG.sample=(window.claude&&claude.use)?await claude.use('sample'):null}catch(e){AG.sample=null}
- AG.checked=true;if(tab==='agent'&&!AG.busy)render();
+ AG.checked=true;if(!AG.sample&&tab==='agent')tab='home';render();
 }
 
 /* ============ RENDER ============ */
 function softRender(){
  const cd=countdown();$('#cd').innerHTML=`<b>${cd.big}</b><span>${cd.small}</span>`;
  const n=openItems().length;
- $('#nav').innerHTML=TABS.map(t=>`<button class="${tab===t[0]?'on':''}" data-a="tab" data-v="${t[0]}"><span>${t[2]}</span>${t[0]==='todo'&&n?`<b class="badge">${n}</b>`:''}</button>`).join('');
+ $('#nav').innerHTML=TABS.filter(t=>t[0]!=='agent'||!AG.checked||AG.sample).map(t=>`<button class="${tab===t[0]?'on':''}" data-a="tab" data-v="${t[0]}"><span>${t[2]}</span>${t[0]==='todo'&&n?`<b class="badge">${n}</b>`:''}</button>`).join('');
 }
 function render(){
  softRender();
