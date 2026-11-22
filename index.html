@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#111111">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="פריז">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>פריז — הטיול שלנו</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800;900&display=swap" rel="stylesheet">
@@ -553,6 +560,8 @@ document.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-d
 document.addEventListener('pointerup',()=>{drag=null;setTimeout(()=>{dragMoved=false},50)});
 
 render();initSync();initAgent();
+
+if('serviceWorker' in navigator){try{navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}}
 </script>
 </body>
 </html>
