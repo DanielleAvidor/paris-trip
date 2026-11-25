@@ -397,8 +397,10 @@ function vTodo(){
  let h=`<div class="card" style="background:#111;color:#fff"><div class="row"><div style="font-weight:900;font-size:56px;line-height:1">${items.length}</div><div><b style="font-size:18px">${items.length?'דברים נשארו לסגור':'הכול סגור!'}</b><div style="opacity:.75;font-size:13px">${urg.length} מהם דחופים</div></div></div></div>`;
  if(urg.length)h+=`<div class="sec"><h2>דחוף</h2></div><div class="grid">${urg.map(itemRow).join('')}</div>`;
  if(rest.length)h+=`<div class="sec"><h2>שאר הדברים</h2></div><div class="grid">${rest.map(itemRow).join('')}</div>`;
- const done=S.tasks.filter(t=>t.done);
- if(done.length)h+=`<div class="sec"><h2>בוצע</h2><small>${done.length}</small></div><div class="grid">${done.map(t=>`<div class="card row"><div class="ico">✅</div><div class="sp mut" style="text-decoration:line-through">${esc(t.txt)}</div><button class="x" data-a="tTog" data-v="${t.id}">↩︎</button><button class="x" data-a="tDel" data-v="${t.id}">🗑️</button></div>`).join('')}</div>`;
+ const doneB=S.bookings.filter(x=>x.status==='done'||x.status==='skip'),doneT=S.tasks.filter(t=>t.done),dn=doneB.length+doneT.length;
+ if(dn)h+=`<div class="sec"><h2>בוצע</h2><small>${dn} · אפשר להחזיר</small></div><div class="grid">`+
+  doneB.map(x=>`<div class="card row"><div class="ico">${x.e}</div><div class="sp"><b style="text-decoration:line-through;opacity:.6">${esc(x.n)}</b> <span class="pill s-${x.status}">${STATUS[x.status]}</span></div><button class="btn ghost sm" data-a="bReopen" data-v="${x.id}">↩︎ החזר</button></div>`).join('')+
+  doneT.map(t=>`<div class="card row"><div class="ico">✓</div><div class="sp mut" style="text-decoration:line-through">${esc(t.txt)}</div><button class="btn ghost sm" data-a="tTog" data-v="${t.id}">↩︎ החזר</button><button class="x" data-a="tDel" data-v="${t.id}" aria-label="מחיקה">🗑️</button></div>`).join('')+`</div>`;
  return h+`<div style="margin:18px 0"><button class="btn" data-a="addTask">＋ משימה חדשה</button></div>`}
 
 /* ---- agent ---- */
@@ -542,6 +544,7 @@ const A={
  quick:v=>agentSend(QUICK[+v]),
  netStop:(v,el)=>{const s=findStop(+el.dataset.d,v);if(s){s.done=!s.done;save();render()}},
  netHub:()=>{const b=S.bookings.find(x=>x.id==='b_h');if(b)bookModal(b);else{tab='book';render()}},
+ bReopen:v=>{const b=S.bookings.find(x=>x.id===v);if(b){b.status='todo';save();render()}},
  bDone:v=>{const b=S.bookings.find(x=>x.id===v);if(b){b.status='done';save();render()}}
 };
 let dragMoved=false;
