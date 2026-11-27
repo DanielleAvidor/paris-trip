@@ -280,7 +280,7 @@ function closedWarns(i){
  if(!S.start||!S.days[i])return [];
  const d=new Date(S.start+'T00:00:00');d.setDate(d.getDate()+i);const wd=d.getDay();
  return S.days[i].stops.filter(s=>s.p&&CLOSED[s.p]&&CLOSED[s.p].includes(wd)).map(s=>P[s.p].n+' בדרך כלל סגור בימי '+DAYN[wd]+'. כדאי לוודא באתר הרשמי או להחליף יום.')}
-let PV=false;
+let PV=false,MORE=false;
 function ensureFx(){if(!S.fx||typeof S.fx.rate!=='number')S.fx={rate:3.5,date:'',live:false}}
 function fxLabel(){ensureFx();const f=S.fx;return '1€ = '+f.rate.toFixed(2)+' ₪ · '+(f.live?'שער חי'+(f.date?' ('+f.date+')':''):'שער משוער, כדאי לעדכן')}
 function fxCalc(){
@@ -336,22 +336,23 @@ function vHome(){
  const st=allStops(),sd=st.filter(x=>x.done).length,cd=countdown();
  const items=openItems().sort((a,b)=>b.urgent-a.urgent),next=items[0];
  let h=`<div class="chips">`+S.days.map((d,i)=>`<button class="lg" data-a="gotoDay" data-v="${i}"><i style="background:${COL[i%COL.length]}"></i>יום ${i+1}</button>`).join('')+`</div>`;
- h+=`<div class="card net">${netSVG()}</div><div class="mut" style="margin:6px 2px 0">הקישו על תחנה כדי לסמן שהיינו שם. הקישו על המלון כדי לסגור אותו.</div>`;
+ h+=`<div class="card net">${netSVG()}</div><div class="mut" style="margin:6px 2px 0">הקישו על תחנה כדי לסמן שהיינו שם.</div>`;
  const di=cd.day>=0?cd.day:(PV?0:-1);
  if(di>=0&&S.days[di]){h+=nowCard(di)}
- else h+=`<div style="margin-top:12px"><button class="btn ghost sm" data-a="pv">תצוגה מקדימה של מצב היום</button></div>`;
- h+=`<div class="sec"><h2>התחנה הפתוחה הבאה</h2><small>${items.length} פתוחות</small></div>`;
- if(next){h+=`<div class="card row"><div class="ico">!</div><div class="sp"><b style="font-size:18px">${esc(next.n)}</b>${next.urgent?' <span class="pill s-todo">דחוף</span>':''}</div>${next.k==='b'?`<button class="btn sm" data-a="bDone" data-v="${next.id}">סגרנו</button>`:`<button class="btn sm" data-a="tTog" data-v="${next.id}">בוצע</button>`}</div><div style="margin-top:10px"><button class="btn ghost sm" data-a="tab" data-v="todo">לכל הרשימה ←</button></div>`}
- else h+=`<div class="card empty">הכול סגור. תיהנו!</div>`;
- h+=`<div class="grid g3" style="margin-top:16px"><div class="card stat"><b>${bd}/${b.length}</b><span>הזמנות</span></div><div class="card stat"><b>${td}/${tk.length}</b><span>משימות</span></div><div class="card stat"><b>${sd}/${st.length}</b><span>תחנות</span></div></div>`;
+ 
+ if(next){h+=`<div class="card row" style="margin-top:12px"><div class="ico">!</div><div class="sp"><div class="mut">הבא לסגירה · ${items.length} פתוחות</div><b style="font-size:18px">${esc(next.n)}</b>${next.urgent?' <span class="pill s-todo">דחוף</span>':''}</div>${next.k==='b'?`<button class="btn sm" data-a="bDone" data-v="${next.id}">סגרנו</button>`:`<button class="btn sm" data-a="tTog" data-v="${next.id}">בוצע</button>`}</div>`}
+ else h+=`<div class="card empty" style="margin-top:12px">הכול סגור. תיהנו!</div>`;
+ h+=`<div class="mut" style="margin:10px 2px;text-align:center">הזמנות ${bd}/${b.length} · משימות ${td}/${tk.length} · תחנות ${sd}/${st.length}</div>`;
+ h+=`<button class="btn ghost sm" style="width:100%" data-a="more">${MORE?'פחות ▲':'עוד: מחשבון מטבע, תאריך יציאה, שיתוף ▼'}</button>`;
+ if(MORE){
  ensureFx();
- h+=`<div class="card" style="margin-top:12px"><b style="font-size:17px">מחשבון מטבע</b>
+ h+=`<div class="card" style="margin-top:10px"><b style="font-size:17px">מחשבון מטבע</b>
  <div class="row" style="margin-top:8px"><input id="fxamt" inputmode="decimal" placeholder="סכום" value="100" style="max-width:130px"><select id="fxdir" style="max-width:130px"><option value="ils">₪ ל-€</option><option value="eur">€ ל-₪</option></select><div id="fxout" style="font-size:24px;font-weight:900;flex:1;text-align:start"></div></div>
- <div class="row" style="margin-top:8px;flex-wrap:wrap"><span class="mut" id="fxlbl"></span><button class="btn ghost sm" data-a="fxEdit">עדכון שער</button></div>
- <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">${[5,10,20,50,100].map(n=>`<span class="pill s-skip">€${n} ≈ ₪${(n*S.fx.rate).toFixed(0)}</span>`).join('')}</div></div>`;
- h+=`<div class="card" style="margin-top:12px"><label style="margin-top:0">מתי יוצאים?</label><div class="row"><input type="date" id="start" value="${esc(S.start)}" style="max-width:200px"><span class="mut">${S.days.length} ימים בלוז</span></div></div>`;
- if(AG.checked&&!AG.sample)h+=`<div class="card" style="margin-top:12px"><b>הסוכן והסנכרון בין שניכם</b><div class="mut" style="margin:4px 0 10px">בגרסה הזו הכול נשמר רק במכשיר הזה. הסוכן והסנכרון זמינים בגרסה ב-Claude.</div><a class="btn sm" target="_blank" rel="noopener" href="https://claude.ai/artifact/Sh2wnvXzshGhTTx9vaeeGx">פתחו את הגרסה המלאה</a></div>`;
- h+=`<div style="margin:16px 0 6px"><button class="btn ghost" data-a="share">העתקת הלוז ל-WhatsApp</button></div>`;
+ <div class="row" style="margin-top:8px;flex-wrap:wrap"><span class="mut" id="fxlbl"></span><button class="btn ghost sm" data-a="fxEdit">עדכון שער</button></div></div>
+ <div class="card" style="margin-top:10px"><label style="margin-top:0">מתי יוצאים?</label><div class="row"><input type="date" id="start" value="${esc(S.start)}" style="max-width:200px"><span class="mut">${S.days.length} ימים בלוז</span></div></div>
+ <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn ghost sm" data-a="share">העתקת הלוז ל-WhatsApp</button><button class="btn ghost sm" data-a="pv">${PV?'יציאה מתצוגת היום':'תצוגה מקדימה של מצב היום'}</button></div>`;
+ if(AG.checked&&!AG.sample)h+=`<div class="card" style="margin-top:10px"><b>הסוכן והסנכרון בין שניכם</b><div class="mut" style="margin:4px 0 10px">בגרסה הזו הכול נשמר רק במכשיר הזה. הסוכן והסנכרון זמינים בגרסה ב-Claude.</div><a class="btn sm" target="_blank" rel="noopener" href="https://claude.ai/artifact/Sh2wnvXzshGhTTx9vaeeGx">פתחו את הגרסה המלאה</a></div>`;
+ }
  return h}
 function itemRow(it){
  const act=it.k==='b'?`<button class="pill s-${it.st}" data-a="bCycle" data-v="${it.id}">${STATUS[it.st]}</button>`:`<button class="btn sm" data-a="tTog" data-v="${it.id}">בוצע ✓</button>`;
@@ -599,6 +600,7 @@ const A={
  netStop:(v,el)=>{const s=findStop(+el.dataset.d,v);if(s){s.done=!s.done;save();render()}},
  netHub:()=>{const b=S.bookings.find(x=>x.id==='b_h');if(b)bookModal(b);else{tab='book';render()}},
  pv:()=>{PV=!PV;render()},
+ more:()=>{MORE=!MORE;render()},
  fxEdit:()=>{ensureFx();modal('עדכון שער',`<label>כמה שקלים שווה יורו אחד?</label><input name="r" inputmode="decimal" value="${S.fx.rate.toFixed(2)}"><div class="mut" style="margin-top:8px">אפשר לבדוק את השער באפליקציית הבנק או בכרטיס האשראי. בגרסת ה-GitHub השער מתעדכן לבד כשיש אינטרנט.</div>`,fd=>{const r=parseFloat(String(fd.get('r')).replace(',','.'));if(isFinite(r)&&r>0.5&&r<20)S.fx={rate:r,date:'',live:false}})},
  bReopen:v=>{const b=S.bookings.find(x=>x.id===v);if(b){b.status='todo';save();render()}},
  bDone:v=>{const b=S.bookings.find(x=>x.id===v);if(b){b.status='done';save();render()}}
@@ -628,7 +630,6 @@ document.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-d
 document.addEventListener('pointerup',()=>{drag=null;setTimeout(()=>{dragMoved=false},50)});
 
 render();initSync();initAgent();initFx();
-
 if('serviceWorker' in navigator){try{navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}}
 </script>
 </body>
