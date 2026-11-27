@@ -108,6 +108,14 @@ textarea{min-height:70px;resize:vertical}
 @keyframes bl{0%,80%,100%{opacity:.2}40%{opacity:1}}
 .ask{position:sticky;bottom:78px;background:var(--paper);padding:8px 0 4px;display:flex;gap:8px}
 .ask input{flex:1}
+.toast{position:fixed;inset-inline:16px;bottom:84px;z-index:40;display:flex;justify-content:center;pointer-events:none}
+.toast>div{pointer-events:auto;background:#111;color:#fff;border-radius:999px;padding:9px 12px 9px 18px;display:flex;align-items:center;gap:14px;font-size:14px;font-weight:500;box-shadow:0 10px 30px -10px rgba(0,0,0,.6);animation:up .2s ease}
+.toast button{background:#fff;color:#111;border-radius:999px;padding:5px 14px;font-weight:900;font-size:13px}
+.now{background:#111;color:#fff;border-color:#111}
+.now .tip{color:#ddd}
+.now .btn{background:#fff;color:#111}
+.now .btn.ghost{background:transparent;color:#fff;border:2px solid #fff}
+.warn{background:#fde2df;color:#a8281e;border:2px solid #a8281e;border-radius:12px;padding:6px 12px;font-size:13px;font-weight:700;margin-top:8px}
 @media(max-width:520px){.g3{gap:8px}.ring svg{width:62px;height:62px}}
 </style>
 </head>
@@ -124,6 +132,7 @@ textarea{min-height:70px;resize:vertical}
 </header>
 <div class="wrap"><main id="view"></main></div>
 <nav><div class="in" id="nav"></div></nav>
+<div id="toast" class="toast"></div>
 <div id="modal"></div>
 
 <script>
@@ -192,6 +201,9 @@ const ROUTES=[
 const COL=['#d9382c','#1f6fd1','#e0a100','#1f9d5a','#8a4fa3','#e0508a','#1a9aa6','#7a5a3a'];
 const SEINE=[[2.240,48.8330],[2.255,48.8400],[2.268,48.8490],[2.280,48.8560],[2.2927,48.8610],[2.3017,48.8637],[2.3135,48.8640],[2.327,48.8625],[2.338,48.8583],[2.349,48.8552],[2.357,48.8518],[2.366,48.8470],[2.378,48.8425],[2.395,48.8370],[2.420,48.8310]];
 const PARKS=[[2.3275,48.8634,26,12],[2.3372,48.8462,22,15],[2.2980,48.8556,12,26],[2.3935,48.8614,24,18]];
+const BK={eiffel:'b_ei',louvre:'b_lo',orsay:'b_or',saintechapelle:'b_sc',seinecruise:'b_cr'};
+const CLOSED={louvre:[2],orsay:[1]};
+const DAYN=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
 const STATUS={todo:'לא התחלנו',progress:'בתהליך',done:'סגור ✓',skip:'לא צריך'};
 const ORDER=['todo','progress','done','skip'];
 
@@ -220,6 +232,7 @@ function seed(){return{v:1,ts:0,start:'',
 let S;
 try{S=JSON.parse(localStorage.getItem('paris-trip')||'null')}catch(e){}
 if(!S||S.v!==1)S=seed();
+if(!S.fx||typeof S.fx.rate!=='number')S.fx={rate:3.5,date:'',live:false};
 let dbDoc=null,tmr=null;
 function save(){S.ts=Date.now();clearTimeout(tmr);tmr=setTimeout(()=>{const j=JSON.stringify(S);try{localStorage.setItem('paris-trip',j)}catch(e){}
  try{if(dbDoc)Promise.resolve(dbDoc.set({json:j})).catch(()=>setSync('שמור במכשיר בלבד'))}catch(e){}},300)}
@@ -263,6 +276,39 @@ function dayIds(d){return d.stops.filter(s=>s.p&&P[s.p]).map(s=>s.p)}
 /* ============ VIEWS ============ */
 function ring(pct,col,label,sub){const c=2*Math.PI*30,o=c*(1-pct);
  return `<div class="card ring"><svg viewBox="0 0 76 76"><circle cx="38" cy="38" r="30" fill="none" stroke="#eadad3" stroke-width="8"/><circle cx="38" cy="38" r="30" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${o}" transform="rotate(-90 38 38)"/><text x="38" y="43" text-anchor="middle" font-size="17" font-weight="800" fill="#4a1a28" font-family="Heebo">${Math.round(pct*100)}%</text></svg><b>${label}</b><span>${sub}</span></div>`}
+function closedWarns(i){
+ if(!S.start||!S.days[i])return [];
+ const d=new Date(S.start+'T00:00:00');d.setDate(d.getDate()+i);const wd=d.getDay();
+ return S.days[i].stops.filter(s=>s.p&&CLOSED[s.p]&&CLOSED[s.p].includes(wd)).map(s=>P[s.p].n+' בדרך כלל סגור בימי '+DAYN[wd]+'. כדאי לוודא באתר הרשמי או להחליף יום.')}
+let PV=false;
+function ensureFx(){if(!S.fx||typeof S.fx.rate!=='number')S.fx={rate:3.5,date:'',live:false}}
+function fxLabel(){ensureFx();const f=S.fx;return '1€ = '+f.rate.toFixed(2)+' ₪ · '+(f.live?'שער חי'+(f.date?' ('+f.date+')':''):'שער משוער, כדאי לעדכן')}
+function fxCalc(){
+ ensureFx();const a=document.getElementById('fxamt'),d=document.getElementById('fxdir'),o=document.getElementById('fxout'),l=document.getElementById('fxlbl');
+ if(l)l.textContent=fxLabel();
+ if(!a||!d||!o)return;
+ const v=parseFloat(String(a.value).replace(',','.'));
+ if(!isFinite(v)){o.textContent='—';return}
+ o.textContent=d.value==='ils'?(v/S.fx.rate).toFixed(2)+' €':(v*S.fx.rate).toFixed(2)+' ₪'}
+async function initFx(){
+ try{
+  ensureFx();
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),6000);
+  const r=await fetch('https://api.frankfurter.app/latest?from=EUR&to=ILS',{signal:c.signal});clearTimeout(t);
+  const j=await r.json();
+  if(j&&j.rates&&typeof j.rates.ILS==='number'){S.fx={rate:j.rates.ILS,date:j.date||'',live:true};save();fxCalc()}
+ }catch(e){}}
+function nowCard(di){
+ const day=S.days[di],next=day.stops.find(s=>!s.done),left=day.stops.filter(s=>!s.done).length;
+ let h=`<div class="sec"><h2>${PV?'תצוגה מקדימה · ':''}עכשיו, יום ${di+1}</h2>${PV?`<button class="btn ghost sm" data-a="pv">סגירה</button>`:''}</div>`;
+ if(!next)return h+`<div class="card now"><b style="font-size:20px">סיימתם את היום</b><div class="tip">כל התחנות סומנו. לילה טוב.</div></div>`;
+ const p=next.p&&P[next.p],bk=p&&BK[next.p]?S.bookings.find(b=>b.id===BK[next.p]):null;
+ h+=`<div class="card now"><div class="mut" style="color:#ccc">${next.t?esc(next.t)+' · ':''}תחנה הבאה · נשארו ${left}</div>
+ <div style="font-size:30px;font-weight:900;line-height:1.1;margin-top:2px">${p?esc(p.n):esc(next.txt||'תחנה')}</div>
+ ${p?`<div class="tip">${esc(p.tip)}</div>`:''}${p&&next.txt?`<div class="tip">${esc(next.txt)}</div>`:''}`;
+ if(bk){const ok=bk.status==='done';h+=`<div style="margin-top:10px;background:${ok?'#1f9d5a':'#d9382c'};border-radius:12px;padding:8px 12px;font-size:14px;font-weight:700">${esc(bk.n)}: ${ok?'סגור':'עוד לא סגור'}${bk.when?' · '+esc(bk.when):''}${bk.code?' · קוד '+esc(bk.code):''}</div>`}
+ h+=`<div class="row" style="margin-top:12px;flex-wrap:wrap">${p?`<a class="btn sm" target="_blank" rel="noopener" href="${gmPlace(next.p)}">ניווט</a>`:''}<button class="btn ghost sm" data-a="stopTog" data-d="${di}" data-v="${next.id}">הגענו ✓</button></div></div>`;
+ return h}
 function netSVG(){
  const W=350,rowH=104,top=116,n=S.days.length,tx=318;
  const Hh=top+Math.max(n,1)*rowH-26;
@@ -291,11 +337,18 @@ function vHome(){
  const items=openItems().sort((a,b)=>b.urgent-a.urgent),next=items[0];
  let h=`<div class="chips">`+S.days.map((d,i)=>`<button class="lg" data-a="gotoDay" data-v="${i}"><i style="background:${COL[i%COL.length]}"></i>יום ${i+1}</button>`).join('')+`</div>`;
  h+=`<div class="card net">${netSVG()}</div><div class="mut" style="margin:6px 2px 0">הקישו על תחנה כדי לסמן שהיינו שם. הקישו על המלון כדי לסגור אותו.</div>`;
- if(cd.day>=0&&S.days[cd.day]){const d=S.days[cd.day];h+=`<div class="sec"><h2>היום: ${esc(d.title)}</h2></div>${dayHTML(cd.day,true)}`}
+ const di=cd.day>=0?cd.day:(PV?0:-1);
+ if(di>=0&&S.days[di]){h+=nowCard(di)}
+ else h+=`<div style="margin-top:12px"><button class="btn ghost sm" data-a="pv">תצוגה מקדימה של מצב היום</button></div>`;
  h+=`<div class="sec"><h2>התחנה הפתוחה הבאה</h2><small>${items.length} פתוחות</small></div>`;
  if(next){h+=`<div class="card row"><div class="ico">!</div><div class="sp"><b style="font-size:18px">${esc(next.n)}</b>${next.urgent?' <span class="pill s-todo">דחוף</span>':''}</div>${next.k==='b'?`<button class="btn sm" data-a="bDone" data-v="${next.id}">סגרנו</button>`:`<button class="btn sm" data-a="tTog" data-v="${next.id}">בוצע</button>`}</div><div style="margin-top:10px"><button class="btn ghost sm" data-a="tab" data-v="todo">לכל הרשימה ←</button></div>`}
  else h+=`<div class="card empty">הכול סגור. תיהנו!</div>`;
  h+=`<div class="grid g3" style="margin-top:16px"><div class="card stat"><b>${bd}/${b.length}</b><span>הזמנות</span></div><div class="card stat"><b>${td}/${tk.length}</b><span>משימות</span></div><div class="card stat"><b>${sd}/${st.length}</b><span>תחנות</span></div></div>`;
+ ensureFx();
+ h+=`<div class="card" style="margin-top:12px"><b style="font-size:17px">מחשבון מטבע</b>
+ <div class="row" style="margin-top:8px"><input id="fxamt" inputmode="decimal" placeholder="סכום" value="100" style="max-width:130px"><select id="fxdir" style="max-width:130px"><option value="ils">₪ ל-€</option><option value="eur">€ ל-₪</option></select><div id="fxout" style="font-size:24px;font-weight:900;flex:1;text-align:start"></div></div>
+ <div class="row" style="margin-top:8px;flex-wrap:wrap"><span class="mut" id="fxlbl"></span><button class="btn ghost sm" data-a="fxEdit">עדכון שער</button></div>
+ <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">${[5,10,20,50,100].map(n=>`<span class="pill s-skip">€${n} ≈ ₪${(n*S.fx.rate).toFixed(0)}</span>`).join('')}</div></div>`;
  h+=`<div class="card" style="margin-top:12px"><label style="margin-top:0">מתי יוצאים?</label><div class="row"><input type="date" id="start" value="${esc(S.start)}" style="max-width:200px"><span class="mut">${S.days.length} ימים בלוז</span></div></div>`;
  if(AG.checked&&!AG.sample)h+=`<div class="card" style="margin-top:12px"><b>הסוכן והסנכרון בין שניכם</b><div class="mut" style="margin:4px 0 10px">בגרסה הזו הכול נשמר רק במכשיר הזה. הסוכן והסנכרון זמינים בגרסה ב-Claude.</div><a class="btn sm" target="_blank" rel="noopener" href="https://claude.ai/artifact/Sh2wnvXzshGhTTx9vaeeGx">פתחו את הגרסה המלאה</a></div>`;
  h+=`<div style="margin:16px 0 6px"><button class="btn ghost" data-a="share">העתקת הלוז ל-WhatsApp</button></div>`;
@@ -309,7 +362,7 @@ function dayHTML(i,compact){
  let h='';
  if(!compact){
   h+=`<div class="card"><div class="row"><div class="ico">${esc(d.e)}</div><div class="sp"><div class="mut">יום ${i+1}${dayDate(i)?' · '+dayDate(i):''}</div><h2 style="font-size:24px">${esc(d.title)}</h2></div><button class="x" data-a="editDay" data-v="${i}">✎</button></div>
-  ${d.note?`<div class="tip" style="margin-top:8px">${esc(d.note)}</div>`:''}
+  ${d.note?`<div class="tip" style="margin-top:8px">${esc(d.note)}</div>`:''}${closedWarns(i).map(w=>`<div class="warn">שימו לב: ${esc(w)}</div>`).join('')}
   <div class="row mut" style="margin-top:8px"><span>${d.stops.length} תחנות</span><span>🚶 ${fmtKm(st.km)} · ~${st.min} דק׳ הליכה</span></div>
   <div class="row" style="margin-top:10px;flex-wrap:wrap"><a class="btn red sm" target="_blank" rel="noopener" href="${gmDir(ids)}">🧭 ניווט ביום ב-Google Maps</a><button class="btn ghost sm" data-a="showDayMap" data-v="${i}">🗺️ על המפה</button><button class="btn ghost sm" data-a="addStop" data-v="${i}">＋ תחנה</button></div></div>`}
  h+=`<div class="tl" style="--dc:${COL[i%COL.length]}">`;
@@ -394,7 +447,7 @@ function vBook(){
 /* ---- todo ---- */
 function vTodo(){
  const items=openItems(),urg=items.filter(i=>i.urgent),rest=items.filter(i=>!i.urgent);
- let h=`<div class="card" style="background:#111;color:#fff"><div class="row"><div style="font-weight:900;font-size:56px;line-height:1">${items.length}</div><div><b style="font-size:18px">${items.length?'דברים נשארו לסגור':'הכול סגור!'}</b><div style="opacity:.75;font-size:13px">${urg.length} מהם דחופים</div></div></div></div>`;
+ let h=`<div class="card" style="background:#111;color:#fff"><div class="row"><div style="font-weight:900;font-size:56px;line-height:1">${items.length}</div><div><b style="font-size:18px">${items.length?'דברים נשארו לסגור':'הכול סגור!'}</b><div style="opacity:.75;font-size:13px">${urg.length} מהם דחופים${typeof countdown().big==='number'?' · '+countdown().big+' ימים ליציאה':''}</div></div></div></div>`;
  if(urg.length)h+=`<div class="sec"><h2>דחוף</h2></div><div class="grid">${urg.map(itemRow).join('')}</div>`;
  if(rest.length)h+=`<div class="sec"><h2>שאר הדברים</h2></div><div class="grid">${rest.map(itemRow).join('')}</div>`;
  const doneB=S.bookings.filter(x=>x.status==='done'||x.status==='skip'),doneT=S.tasks.filter(t=>t.done),dn=doneB.length+doneT.length;
@@ -479,6 +532,7 @@ function render(){
  lastTab=tab;
  const v={home:vHome,plan:vPlan,map:vMap,routes:vRoutes,book:vBook,todo:vTodo,agent:vAgent}[tab];
  $('#view').innerHTML=v();
+ if(tab==='home')fxCalc();
  if(tab==='agent')updateChat();
 }
 
@@ -544,9 +598,19 @@ const A={
  quick:v=>agentSend(QUICK[+v]),
  netStop:(v,el)=>{const s=findStop(+el.dataset.d,v);if(s){s.done=!s.done;save();render()}},
  netHub:()=>{const b=S.bookings.find(x=>x.id==='b_h');if(b)bookModal(b);else{tab='book';render()}},
+ pv:()=>{PV=!PV;render()},
+ fxEdit:()=>{ensureFx();modal('עדכון שער',`<label>כמה שקלים שווה יורו אחד?</label><input name="r" inputmode="decimal" value="${S.fx.rate.toFixed(2)}"><div class="mut" style="margin-top:8px">אפשר לבדוק את השער באפליקציית הבנק או בכרטיס האשראי. בגרסת ה-GitHub השער מתעדכן לבד כשיש אינטרנט.</div>`,fd=>{const r=parseFloat(String(fd.get('r')).replace(',','.'));if(isFinite(r)&&r>0.5&&r<20)S.fx={rate:r,date:'',live:false}})},
  bReopen:v=>{const b=S.bookings.find(x=>x.id===v);if(b){b.status='todo';save();render()}},
  bDone:v=>{const b=S.bookings.find(x=>x.id===v);if(b){b.status='done';save();render()}}
 };
+const UNDO={stopTog:'התחנה עודכנה',netStop:'התחנה עודכנה',delStop:'התחנה נמחקה',delDay:'היום נמחק',bCycle:'ההזמנה עודכנה',bDone:'ההזמנה נסגרה',bReopen:'ההזמנה הוחזרה',tTog:'המשימה עודכנה',tDel:'המשימה נמחקה'};
+let toastT=null;
+function toastUndo(msg,snap){
+ const t=document.getElementById('toast');if(!t)return;
+ t.innerHTML=`<div><span>${esc(msg)}</span><button data-a="undo">ביטול</button></div>`;t._snap=snap;
+ clearTimeout(toastT);toastT=setTimeout(()=>{t.innerHTML='';t._snap=null},6000)}
+A.undo=()=>{const t=document.getElementById('toast');if(t&&t._snap){S=JSON.parse(t._snap);curDay=Math.min(curDay,S.days.length-1);t.innerHTML='';t._snap=null;save();render()}};
+Object.keys(UNDO).forEach(n=>{const f=A[n];A[n]=(v,el,e)=>{const snap=JSON.stringify(S);f(v,el,e);toastUndo(UNDO[n],snap)}});
 let dragMoved=false;
 document.addEventListener('click',e=>{
  const pin=e.target.closest('[data-pin]');
@@ -554,7 +618,8 @@ document.addEventListener('click',e=>{
  const el=e.target.closest('[data-a]');if(!el)return;
  const f=A[el.dataset.a];if(f){e.stopPropagation();f(el.dataset.v,el,e)}});
 document.addEventListener('submit',e=>{if(e.target.id==='askform'){e.preventDefault();const i=document.getElementById('askin'),t=i.value;i.value='';agentSend(t)}});
-document.addEventListener('change',e=>{if(e.target.id==='start'){S.start=e.target.value;save();render()}});
+document.addEventListener('input',e=>{if(e.target.id==='fxamt')fxCalc()});
+document.addEventListener('change',e=>{if(e.target.id==='fxdir')fxCalc();if(e.target.id==='start'){S.start=e.target.value;save();render()}});
 /* map drag */
 let drag=null;
 document.addEventListener('pointerdown',e=>{const s=e.target.closest('#mapsvg');if(!s)return;drag={x:e.clientX,y:e.clientY,cx:M.cx,cy:M.cy,s,moved:false};dragMoved=false});
@@ -562,7 +627,7 @@ document.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-d
  if(!drag.moved)return;const r=drag.s.getBoundingClientRect(),k=(W/M.z)/r.width;M.cx=drag.cx-dx*k;M.cy=drag.cy-dy*k;drag.s.setAttribute('viewBox',mapVB().join(' '))});
 document.addEventListener('pointerup',()=>{drag=null;setTimeout(()=>{dragMoved=false},50)});
 
-render();initSync();initAgent();
+render();initSync();initAgent();initFx();
 
 if('serviceWorker' in navigator){try{navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}}
 </script>
